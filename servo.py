@@ -1,71 +1,56 @@
+#Autores: Andrés Galvis, Keppler Sánchez y Daniel Viafara.
+
 from machine import Pin, PWM
 from neopixel import NeoPixel
 import utime
 
+# Configuración del servo en ESP32 (GPIO 13)
+servo = PWM(Pin(13), freq=50)
 
-servo = PWM(Pin(13), freq=50)    
-pixels = NeoPixel(Pin(15), 16)
-time = 0.5
+# Configuración de la tira Neopixel (GPIO 15, 16 LEDs)
+num_leds = 16
+pixels = NeoPixel(Pin(15), num_leds)
 
-rainbow = [
-    (255, 255, 255), (114, 13, 0), (102, 25, 0), (90, 37, 0), (78, 49, 0), 
-    (66, 61, 0), (54, 73, 0), (42, 85, 0), (30, 97, 0), (18, 109, 0), 
-    (6, 121, 0), (0, 122, 5), (0, 110, 17), (0, 98, 29), (0, 86, 41), (42, 85, 0)
-]
+# Gradientes de colores
+blue_gradient = [(0, 0, i * 16) for i in range(num_leds)]
+red_gradient = [(i * 16, 0, 0) for i in range(num_leds)]
 
+# Función para mapear valores de ángulo a "duty cycle" del servo
+def map_value(x, in_min, in_max, out_min, out_max):
+    return round((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
 
-angulos = [
-    0, 10, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95, 100, 110, 120, 130, 
-    140, 150, 160, 170, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0
-]
+# Función para mover el servo a un ángulo específico
+def mover_servo(angulo):
+    pwm_value = map_value(angulo, 0, 180, 40, 115)  
+    servo.duty(pwm_value)
 
+# Función para actualizar el LED en Neopixel
+def actualizar_neopixel(angulo, direccion):
+    posicion_led = round((angulo / 180) * (num_leds - 1))
+    gradient = blue_gradient if direccion == 1 else red_gradient
 
-def map(x):
-    return int(((x - 0) * (125 - 25)) / (180 - 0) + 25) 
-
-
-def angulo(a):
-    m = map(a)
-    servo.duty(m)
-    utime.sleep(time)  
-
-
-def rotar_neopixel_horario():
-    rainbow.append(rainbow.pop(0))  
-    for j in range(16):
-        pixels[j] = rainbow[j]
+    for i in range(num_leds):
+        pixels[i] = gradient[i]
+    
+    pixels[posicion_led] = (255, 255, 255)  # LED blanco en la posición actual
     pixels.write()
-    utime.sleep(time)
 
-
-def rotar_neopixel_antihorario():
-    rainbow.insert(0, rainbow.pop())  
-    for j in range(16):
-        pixels[j] = rainbow[j]
-    pixels.write()
-    utime.sleep(time)
-
-
+# Función principal
 def main():
-    direccion = 1 
+    angulo = 0
+    direccion = 1  # 1: aumentando, -1: disminuyendo
 
     while True:
-        for i in range(len(angulos)):
-            angulo_actual = angulos[i]
-            angulo(angulo_actual)
+        mover_servo(angulo)
+        actualizar_neopixel(angulo, direccion)
 
-            
-            if i > 0:
-                if angulos[i] > angulos[i - 1]:  
-                    direccion = 1
-                else:  
-                    direccion = -1
+        if angulo >= 180:
+            direccion = -1
+        elif angulo <= 0:
+            direccion = 1
 
-        
-            if direccion == 1:
-                rotar_neopixel_horario()
-            else:                
-                rotar_neopixel_antihorario()
+        angulo += direccion * 5  # Incremento en pasos de 5°
+        utime.sleep_ms(100)
 
-if _name_ == "_main_":
-    main()
+if __name__ == "__main__":
+    main()
